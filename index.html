@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Action Director — 3D 动画导演台</title>
+  <meta name="description" content="Interactive 3D character animation director with multi-pass ControlNet rendering, facial motion capture, and scene management." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <!-- Top Toolbar -->
+  <header id="toolbar">
+    <div class="toolbar-left">
+      <div class="logo">
+        <span class="logo-icon">◈</span>
+        <span class="logo-text">Action Director</span>
+        <span class="logo-version">v1.0</span>
+      </div>
+    </div>
+    <div class="toolbar-center">
+      <div class="render-mode-group" id="renderModeGroup">
+        <button class="render-mode-btn active" data-mode="shaded" title="Shaded">
+          <span class="mode-dot" style="background: #e89040;"></span>Shaded
+        </button>
+        <button class="render-mode-btn" data-mode="pose" title="OpenPose">
+          <span class="mode-dot" style="background: #e04040;"></span>Pose
+        </button>
+        <button class="render-mode-btn" data-mode="depth" title="Depth Map">
+          <span class="mode-dot" style="background: #303030;"></span>Depth
+        </button>
+        <button class="render-mode-btn" data-mode="canny" title="Canny Edge">
+          <span class="mode-dot" style="background: #e0e0e0;"></span>Canny
+        </button>
+        <button class="render-mode-btn" data-mode="normal" title="Normal Map">
+          <span class="mode-dot" style="background: #6080ff;"></span>Normal
+        </button>
+        <button class="render-mode-btn" data-mode="alpha" title="Alpha Matte">
+          <span class="mode-dot" style="background: #fff; border: 1px solid #555;"></span>Alpha
+        </button>
+        <button class="render-mode-btn" data-mode="textured" title="Textured">
+          <span class="mode-dot mode-dot-rainbow"></span>Textured
+        </button>
+      </div>
+    </div>
+    <div class="toolbar-right">
+      <button class="btn btn-sm btn-ghost" id="btnBakeFrame" title="Bake Single Frame">
+        <span class="btn-icon">📸</span> BAKE FRAME
+      </button>
+      <button class="btn btn-sm btn-primary btn-glow" id="btnBake" title="Bake All Frames">
+        <span class="btn-icon">🎬</span> BAKE ALL
+      </button>
+      <button class="btn btn-sm btn-ghost" id="btnSettings" title="Settings">⚙️</button>
+    </div>
+  </header>
+
+  <!-- Main Layout -->
+  <div id="app-layout">
+    <!-- Sidebar -->
+    <aside id="sidebar">
+      <div class="sidebar-tabs">
+        <button class="sidebar-tab active" data-tab="characters" title="Characters">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </button>
+        <button class="sidebar-tab" data-tab="environments" title="Environments">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        </button>
+        <button class="sidebar-tab" data-tab="cameras" title="Cameras">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        </button>
+        <button class="sidebar-tab" data-tab="mocap" title="Motion Capture">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="2"/><path d="M12 7v5m-4 4l4-4 4 4m-8 0v3m8-3v3"/></svg>
+        </button>
+        <button class="sidebar-tab" data-tab="scene" title="Scene I/O">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        </button>
+      </div>
+      <div class="sidebar-content">
+        <!-- Characters Panel -->
+        <div class="sidebar-panel active" id="panel-characters">
+          <div class="panel-header">
+            <h3>角色管理</h3>
+            <div style="display:flex;gap:4px;">
+              <button class="btn btn-xs btn-ghost" id="btnLoadDemo" title="加载程序化演示角色">🤖 程序演示</button>
+              <button class="btn btn-xs btn-accent" id="btnAddChar">+ 添加角色</button>
+            </div>
+          </div>
+
+          <!-- Built-in Model Gallery -->
+          <div class="builtin-gallery" id="builtinGallery">
+            <div class="gallery-title">📦 内置示例模型 <span style="font-size:9px;color:var(--text-muted);">(含骨骼动画)</span></div>
+            <div class="gallery-grid">
+              <button class="gallery-card" data-model="/models/Soldier.glb" data-name="Soldier">
+                <div class="gallery-card-icon">🪖</div>
+                <div class="gallery-card-name">Soldier</div>
+                <div class="gallery-card-meta">4 anims · GLB</div>
+              </button>
+              <button class="gallery-card" data-model="/models/RobotExpressive.glb" data-name="Robot">
+                <div class="gallery-card-icon">🤖</div>
+                <div class="gallery-card-name">Robot</div>
+                <div class="gallery-card-meta">多动作 · GLB</div>
+              </button>
+              <button class="gallery-card" data-model="/models/CesiumMan.glb" data-name="CesiumMan">
+                <div class="gallery-card-icon">🧑</div>
+                <div class="gallery-card-name">CesiumMan</div>
+                <div class="gallery-card-meta">行走 · GLB</div>
+              </button>
+            </div>
+          </div>
+
+          <div class="panel-body" id="characterList">
+            <div class="empty-state">
+              <div class="empty-icon">🧍</div>
+              <p>点击上方示例模型<br/>或拖拽 FBX/GLB 文件到视口</p>
+            </div>
+          </div>
+        </div>
+
+
+        <!-- Environments Panel -->
+        <div class="sidebar-panel" id="panel-environments">
+          <div class="panel-header">
+            <h3>环境场景</h3>
+            <button class="btn btn-xs btn-accent" id="btnAddEnv">+ 添加环境</button>
+          </div>
+          <div class="panel-body" id="environmentList">
+            <div class="empty-state">
+              <div class="empty-icon">🏔️</div>
+              <p>拖拽 GLB/FBX/OBJ 文件<br/>或 HDRI 文件 (.hdr)</p>
+            </div>
+          </div>
+          <div class="panel-section">
+            <h4>HDRI 光照</h4>
+            <div class="control-row">
+              <label>旋转</label>
+              <input type="range" id="hdriRotation" min="0" max="360" value="0" class="slider">
+              <span class="slider-value" id="hdriRotationVal">0°</span>
+            </div>
+            <div class="control-row">
+              <label>强度</label>
+              <input type="range" id="hdriIntensity" min="0" max="300" value="100" class="slider">
+              <span class="slider-value" id="hdriIntensityVal">1.0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cameras Panel -->
+        <div class="sidebar-panel" id="panel-cameras">
+          <div class="panel-header">
+            <h3>相机控制</h3>
+          </div>
+          <div class="panel-body">
+            <div class="panel-section">
+              <h4>关键帧动画</h4>
+              <div class="camera-keyframe-controls">
+                <button class="btn btn-xs btn-ghost" id="btnCamStart">Set Start</button>
+                <button class="btn btn-xs btn-ghost" id="btnCamEnd">Set End</button>
+                <select class="select-sm" id="camInterpolation">
+                  <option value="linear">Linear</option>
+                  <option value="easeIn">Ease In</option>
+                  <option value="easeOut" selected>Ease Out</option>
+                  <option value="easeInOut">Ease In/Out</option>
+                </select>
+              </div>
+              <button class="btn btn-xs btn-primary" id="btnCamPreview" style="margin-top: 8px; width: 100%;">▶ 预览相机动画</button>
+            </div>
+            <div class="panel-section">
+              <h4>视口预设</h4>
+              <div class="camera-presets">
+                <button class="btn btn-xs btn-ghost" data-preset="front">Front</button>
+                <button class="btn btn-xs btn-ghost" data-preset="back">Back</button>
+                <button class="btn btn-xs btn-ghost" data-preset="left">Left</button>
+                <button class="btn btn-xs btn-ghost" data-preset="right">Right</button>
+                <button class="btn btn-xs btn-ghost" data-preset="top">Top</button>
+                <button class="btn btn-xs btn-ghost" data-preset="perspective">Persp</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Motion Capture Panel -->
+        <div class="sidebar-panel" id="panel-mocap">
+          <div class="panel-header">
+            <h3>动作捕捉</h3>
+          </div>
+          <div class="panel-body">
+            <div class="panel-section">
+              <h4>输入源</h4>
+              <div class="radio-group">
+                <label class="radio-label"><input type="radio" name="mocapSource" value="webcam" checked> 摄像头</label>
+                <label class="radio-label"><input type="radio" name="mocapSource" value="video"> 视频文件</label>
+              </div>
+            </div>
+            <div class="panel-section">
+              <h4>追踪类型</h4>
+              <div class="checkbox-group">
+                <label class="checkbox-label"><input type="checkbox" id="trackFace" checked> 面部 (70点)</label>
+                <label class="checkbox-label"><input type="checkbox" id="trackPose"> 全身 (33点)</label>
+                <label class="checkbox-label"><input type="checkbox" id="trackHands"> 手部 (42点)</label>
+              </div>
+            </div>
+            <div class="mocap-preview" id="mocapPreview">
+              <video id="mocapVideo" autoplay playsinline muted></video>
+              <canvas id="mocapCanvas"></canvas>
+              <div class="mocap-overlay-text">点击开始预览</div>
+            </div>
+            <div class="panel-section">
+              <div class="control-row">
+                <label>名称</label>
+                <input type="text" class="input-sm" id="mocapName" placeholder="Capture_001" value="Capture_001">
+              </div>
+            </div>
+            <div class="mocap-controls">
+              <button class="btn btn-sm btn-primary" id="btnMocapStart">📷 开始</button>
+              <button class="btn btn-sm btn-danger" id="btnMocapRec" disabled>🔴 录制</button>
+              <button class="btn btn-sm btn-ghost" id="btnMocapStop" disabled>⏹ 停止</button>
+            </div>
+            <div class="panel-section" id="mocapBindSection" style="display:none;">
+              <h4>面部绑定</h4>
+              <button class="btn btn-xs btn-accent" id="btnAddFaceBind">+ Add Face Bind</button>
+              <div id="faceBindList"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Scene I/O Panel -->
+        <div class="sidebar-panel" id="panel-scene">
+          <div class="panel-header">
+            <h3>场景管理</h3>
+          </div>
+          <div class="panel-body">
+            <div class="panel-section">
+              <div class="control-row">
+                <label>场景名称</label>
+                <input type="text" class="input-sm" id="sceneName" placeholder="MyScene" value="MyScene">
+              </div>
+              <div class="scene-io-buttons">
+                <button class="btn btn-sm btn-primary" id="btnSaveScene" style="flex:1;">💾 保存场景</button>
+                <button class="btn btn-sm btn-ghost" id="btnLoadScene" style="flex:1;">📂 加载场景</button>
+              </div>
+            </div>
+            <div class="panel-section">
+              <h4>已保存场景</h4>
+              <div id="savedSceneList" class="saved-scene-list">
+                <div class="empty-state"><p>暂无保存的场景</p></div>
+              </div>
+            </div>
+            <div class="panel-section">
+              <h4>渲染设置</h4>
+              <div class="control-row">
+                <label>宽度</label>
+                <input type="number" class="input-sm" id="renderWidth" value="512" min="64" max="4096" step="8">
+              </div>
+              <div class="control-row">
+                <label>高度</label>
+                <input type="number" class="input-sm" id="renderHeight" value="512" min="64" max="4096" step="8">
+              </div>
+              <div class="control-row">
+                <label>FPS</label>
+                <input type="number" class="input-sm" id="renderFps" value="24" min="1" max="60">
+              </div>
+              <div class="control-row">
+                <label>帧数</label>
+                <input type="number" class="input-sm" id="renderFrameCount" value="48" min="1" max="3000">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 3D Viewport -->
+    <main id="viewport-container">
+      <canvas id="viewport"></canvas>
+
+      <!-- Gizmo Toolbar (floating) -->
+      <div class="gizmo-toolbar" id="gizmoToolbar">
+        <button class="gizmo-btn active" data-gizmo="translate" title="Move (G)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></svg>
+        </button>
+        <button class="gizmo-btn" data-gizmo="rotate" title="Rotate (R)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+        </button>
+        <button class="gizmo-btn" data-gizmo="scale" title="Scale (S)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="8" height="8" rx="1"/><rect x="14" y="14" width="8" height="8" rx="1"/><path d="M8 8l8 8"/></svg>
+        </button>
+      </div>
+
+      <!-- Render Pass Thumbnails -->
+      <div class="pass-thumbnails" id="passThumbnails">
+        <div class="pass-thumb active" data-pass="shaded"><canvas width="80" height="60"></canvas><span>Shaded</span></div>
+        <div class="pass-thumb" data-pass="pose"><canvas width="80" height="60"></canvas><span>Pose</span></div>
+        <div class="pass-thumb" data-pass="depth"><canvas width="80" height="60"></canvas><span>Depth</span></div>
+        <div class="pass-thumb" data-pass="canny"><canvas width="80" height="60"></canvas><span>Canny</span></div>
+        <div class="pass-thumb" data-pass="normal"><canvas width="80" height="60"></canvas><span>Normal</span></div>
+        <div class="pass-thumb" data-pass="alpha"><canvas width="80" height="60"></canvas><span>Alpha</span></div>
+        <div class="pass-thumb" data-pass="textured"><canvas width="80" height="60"></canvas><span>Textured</span></div>
+      </div>
+
+      <!-- Viewport Info Overlay -->
+      <div class="viewport-info" id="viewportInfo">
+        <span id="infoFps">60 FPS</span>
+        <span id="infoObjects">0 objects</span>
+        <span id="infoFrame">Frame 0/48</span>
+      </div>
+
+      <!-- Drop Zone Overlay -->
+      <div class="drop-zone" id="dropZone">
+        <div class="drop-zone-content">
+          <div class="drop-icon">📁</div>
+          <p>拖拽 3D 文件到此处</p>
+          <span>.fbx · .glb · .gltf · .obj · .bvh · .hdr · .ply</span>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Bottom Timeline -->
+  <footer id="timeline">
+    <div class="timeline-controls">
+      <button class="tl-btn" id="btnSkipStart" title="Skip to Start">⏮</button>
+      <button class="tl-btn" id="btnStepBack" title="Step Back">⏪</button>
+      <button class="tl-btn tl-btn-play" id="btnPlay" title="Play/Pause (Space)">▶</button>
+      <button class="tl-btn" id="btnStepForward" title="Step Forward">⏩</button>
+      <button class="tl-btn" id="btnSkipEnd" title="Skip to End">⏭</button>
+    </div>
+    <div class="timeline-track-container">
+      <div class="timeline-track" id="timelineTrack">
+        <div class="timeline-progress" id="timelineProgress"></div>
+        <div class="timeline-scrubber" id="timelineScrubber"></div>
+        <div class="timeline-ticks" id="timelineTicks"></div>
+      </div>
+    </div>
+    <div class="timeline-info">
+      <span class="tl-frame" id="tlCurrentFrame">0</span>
+      <span class="tl-separator">/</span>
+      <span class="tl-frame" id="tlTotalFrames">48</span>
+      <span class="tl-fps" id="tlFps">24 fps</span>
+    </div>
+  </footer>
+
+  <!-- Settings Modal -->
+  <div class="modal-overlay" id="settingsModal" style="display:none;">
+    <div class="modal glass-panel">
+      <div class="modal-header">
+        <h3>⚙️ 设置</h3>
+        <button class="btn btn-xs btn-ghost" id="btnCloseSettings">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="control-row">
+          <label>渲染宽度</label>
+          <input type="number" class="input-sm" id="settingWidth" value="512" min="64" max="4096" step="8">
+        </div>
+        <div class="control-row">
+          <label>渲染高度</label>
+          <input type="number" class="input-sm" id="settingHeight" value="512" min="64" max="4096" step="8">
+        </div>
+        <div class="control-row">
+          <label>FPS</label>
+          <input type="number" class="input-sm" id="settingFps" value="24" min="1" max="60">
+        </div>
+        <div class="control-row">
+          <label>总帧数</label>
+          <input type="number" class="input-sm" id="settingFrameCount" value="48" min="1" max="3000">
+        </div>
+        <div class="control-row">
+          <label>显示网格</label>
+          <input type="checkbox" id="settingGrid" checked>
+        </div>
+        <div class="control-row">
+          <label>显示骨骼</label>
+          <input type="checkbox" id="settingSkeleton">
+        </div>
+        <div class="control-row">
+          <label>深度 Near</label>
+          <input type="number" class="input-sm" id="settingDepthNear" value="0.1" step="0.1" min="0.01">
+        </div>
+        <div class="control-row">
+          <label>深度 Far</label>
+          <input type="number" class="input-sm" id="settingDepthFar" value="100" step="1" min="1">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
